@@ -29,28 +29,34 @@
       web: "https://teams.microsoft.com/",
       windows: "msteams:",
       ios: "msteams:",
-      autoWebFallback: false
+      autoWebFallback: true
     },
     chatgpt: {
       web: "https://chatgpt.com/",
-      // Best-effort native launch. OpenAI currently does not document
-      // this as a public Windows deep-link contract, so the web fallback
-      // below is intentionally kept.
       windows: "chatgpt:",
       ios: "chatgpt:",
       autoWebFallback: true
     },
     claude: {
-      web: "https://claude.ai/"
+      web: "https://claude.ai/",
+      windows: "claude://claude.ai/new",
+      iosShortcut: true,
+      autoWebFallback: true
     },
     gemini: {
-      web: "https://gemini.google.com/"
+      web: "https://gemini.google.com/",
+      iosShortcut: true,
+      autoWebFallback: true
     },
     gmail: {
-      web: "https://mail.google.com/"
+      web: "https://mail.google.com/",
+      iosShortcut: true,
+      autoWebFallback: true
     },
     drive: {
-      web: "https://drive.google.com/"
+      web: "https://drive.google.com/",
+      iosShortcut: true,
+      autoWebFallback: true
     }
   };
 
@@ -92,8 +98,15 @@
   let attemptingNative = false;
 
   if (p === "ios") {
-    target = cfg.ios || shortcutUrl(cfg.web);
-    attemptingNative = !!cfg.ios || target.startsWith("shortcuts:");
+    if (cfg.ios) {
+      target = cfg.ios;
+      attemptingNative = true;
+    } else if (cfg.iosShortcut) {
+      target = shortcutUrl(cfg.web);
+      attemptingNative = true;
+    } else {
+      target = cfg.web;
+    }
   } else if (p === "windows") {
     target = cfg.windows || cfg.web;
     attemptingNative = !!cfg.windows;
@@ -103,6 +116,9 @@
 
   document.getElementById("web").href = cfg.web;
 
+  // Shared native-app hand-off behavior:
+  // once the app/Shortcut takes focus, close this launcher when possible;
+  // otherwise return to the page that opened it.
   if (attemptingNative) {
     document.addEventListener("visibilitychange", function(){
       if (document.hidden) {
@@ -123,13 +139,15 @@
 
   location.replace(target);
 
+  // For apps where a web fallback is wanted, fall back only if the page
+  // remains visible, which usually means no native handler took over.
   if (cfg.autoWebFallback && attemptingNative) {
     setTimeout(function(){
       if (!nativeLaunchDetected && document.visibilityState === "visible") {
         location.replace(cfg.web);
       }
     }, 3000);
-  } else {
+  } else if (attemptingNative) {
     setTimeout(function(){
       if (!nativeLaunchDetected && document.visibilityState === "visible") {
         document.getElementById("fallback").style.display = "block";
