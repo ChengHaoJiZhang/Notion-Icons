@@ -22,15 +22,23 @@
     spotify: {
       web: "https://open.spotify.com/",
       windows: "spotify:",
-      ios: "spotify:"
+      ios: "spotify:",
+      autoWebFallback: false
     },
     teams: {
       web: "https://teams.microsoft.com/",
       windows: "msteams:",
-      ios: "msteams:"
+      ios: "msteams:",
+      autoWebFallback: false
     },
     chatgpt: {
-      web: "https://chatgpt.com/"
+      web: "https://chatgpt.com/",
+      // Best-effort native launch. OpenAI currently does not document
+      // this as a public Windows deep-link contract, so the web fallback
+      // below is intentionally kept.
+      windows: "chatgpt:",
+      ios: "chatgpt:",
+      autoWebFallback: true
     },
     claude: {
       web: "https://claude.ai/"
@@ -61,8 +69,6 @@
   }
 
   function leaveLauncher(){
-    // Browsers only allow window.close() reliably for script-opened windows.
-    // Try to close first; otherwise return to the page that launched us.
     try { window.close(); } catch(e) {}
     setTimeout(function(){
       if (!window.closed && history.length > 1) {
@@ -83,21 +89,21 @@
   const p = platform();
   let target;
   let nativeLaunchDetected = false;
+  let attemptingNative = false;
 
   if (p === "ios") {
     target = cfg.ios || shortcutUrl(cfg.web);
+    attemptingNative = !!cfg.ios || target.startsWith("shortcuts:");
   } else if (p === "windows") {
     target = cfg.windows || cfg.web;
+    attemptingNative = !!cfg.windows;
   } else {
     target = cfg.web;
   }
 
   document.getElementById("web").href = cfg.web;
 
-  // For Spotify, detect the successful hand-off to the native app.
-  // When the browser becomes visible again, close this launcher page if allowed;
-  // otherwise go back to the page that opened it.
-  if (key === "spotify" && (p === "ios" || p === "windows")) {
+  if (attemptingNative) {
     document.addEventListener("visibilitychange", function(){
       if (document.hidden) {
         nativeLaunchDetected = true;
@@ -105,19 +111,31 @@
         leaveLauncher();
       }
     });
+
+    window.addEventListener("pagehide", function(){
+      nativeLaunchDetected = true;
+    });
+
     window.addEventListener("focus", function(){
       if (nativeLaunchDetected) leaveLauncher();
     });
   }
 
-  // No automatic web fallback: that could open both Spotify and Spotify Web.
   location.replace(target);
 
-  setTimeout(function(){
-    if (!nativeLaunchDetected) {
-      document.getElementById("fallback").style.display = "block";
-    }
-  }, 1800);
+  if (cfg.autoWebFallback && attemptingNative) {
+    setTimeout(function(){
+      if (!nativeLaunchDetected && document.visibilityState === "visible") {
+        location.replace(cfg.web);
+      }
+    }, 3000);
+  } else {
+    setTimeout(function(){
+      if (!nativeLaunchDetected && document.visibilityState === "visible") {
+        document.getElementById("fallback").style.display = "block";
+      }
+    }, 1800);
+  }
 })();
 </script>
 </body>
